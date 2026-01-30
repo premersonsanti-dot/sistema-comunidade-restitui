@@ -48,49 +48,39 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Database States with LocalStorage Sync
-  const [patients, setPatients] = useState<Patient[]>(() => {
-    const saved = localStorage.getItem('medsys_patients');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Database States
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [evolutions, setEvolutions] = useState<Evolution[]>([]);
 
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => {
-    const saved = localStorage.getItem('medsys_prescriptions');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Fetch Data from Supabase
+  const fetchAllData = async () => {
+    if (!currentUser) return;
 
-  const [medications, setMedications] = useState<Medication[]>(() => {
-    const saved = localStorage.getItem('medsys_medications');
-    return saved ? JSON.parse(saved) : [];
-  });
+    const { data: pData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
+    if (pData) setPatients(pData.map(p => ({ ...p, birthDate: p.birth_date })));
 
-  const [evolutions, setEvolutions] = useState<Evolution[]>(() => {
-    const saved = localStorage.getItem('medsys_evolutions');
-    return saved ? JSON.parse(saved) : [];
-  });
+    const { data: mData } = await supabase.from('medications').select('*').order('name', { ascending: true });
+    if (mData) setMedications(mData);
 
-  useEffect(() => { localStorage.setItem('medsys_patients', JSON.stringify(patients)); }, [patients]);
-  useEffect(() => { localStorage.setItem('medsys_prescriptions', JSON.stringify(prescriptions)); }, [prescriptions]);
-  useEffect(() => { localStorage.setItem('medsys_medications', JSON.stringify(medications)); }, [medications]);
-  useEffect(() => { localStorage.setItem('medsys_evolutions', JSON.stringify(evolutions)); }, [evolutions]);
+    const { data: prData } = await supabase.from('prescriptions').select('*').order('date', { ascending: false });
+    if (prData) setPrescriptions(prData.map(pr => ({ ...pr, patientId: pr.patient_id, usageType: pr.usage_type, doctorName: pr.doctor_name, doctorCrm: pr.doctor_crm })));
 
-  // FIX: Definitive cleanup of orphaned records (data without patient)
-  // This replaces the "subtraction hack" by actually deleting phantom data.
+    const { data: eData } = await supabase.from('evolutions').select('*').order('date', { ascending: false });
+    if (eData) setEvolutions(eData.map(e => ({ ...e, patientId: e.patient_id, doctorName: e.doctor_name, doctorCrm: e.doctor_crm })));
+  };
+
   useEffect(() => {
-    if (patients.length >= 0) {
-      const patientIds = new Set(patients.map(p => p.id));
-
-      const orphanedPrescriptions = prescriptions.filter(p => !patientIds.has(p.patientId));
-      if (orphanedPrescriptions.length > 0) {
-        setPrescriptions(prev => prev.filter(p => patientIds.has(p.patientId)));
-      }
-
-      const orphanedEvolutions = evolutions.filter(e => !patientIds.has(e.patientId));
-      if (orphanedEvolutions.length > 0) {
-        setEvolutions(prev => prev.filter(e => patientIds.has(e.patientId)));
-      }
+    if (currentUser) {
+      fetchAllData();
+    } else {
+      setPatients([]);
+      setPrescriptions([]);
+      setMedications([]);
+      setEvolutions([]);
     }
-  }, [patients]);
+  }, [currentUser]);
 
   const handleLogin = async (stayConnected: boolean, credentials: { user: string; pass: string }) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -153,45 +143,102 @@ const App: React.FC = () => {
   };
 
   // CRUD Helpers
-  const addPatient = (newPatient: Omit<Patient, 'id'>) => {
-    const patientWithId = { ...newPatient, id: Date.now().toString() };
-    setPatients(prev => [patientWithId, ...prev]);
-    setIsAddingPatient(false);
-    return patientWithId;
-  };
+  // CRUD Helpers
+  const addPatient = async (newPatient: Omit<Patient, 'id'>) => {
+    if (!currentUser) return;
+    const { data } = await supabase.from('patients').insert([{
+      user_id: currentUser.id,
+      name: newPatient.name,
+      cpf: newPatient.cpf,
+      cns: newPatient.cns,
+      phone: newPatient.phone,
+      address: newPatient.address,
+      birth_date: newPatient.birthDate
+    }]).select().single();
 
-  const updatePatient = (updatedPatient: Patient) => {
-    setPatients(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-  };
-
-  const deletePatient = (id: string) => {
-    if (confirm('Deseja excluir permanentemente este paciente?')) {
-      setPatients(prev => prev.filter(p => p.id !== id));
+    if (data) {
+      const formatted = { ...data, birthDate: data.birth_date };
+      setPatients(prev => [formatted, ...prev]);
+      setIsAddingPatient(false);
+      return formatted; // Although async, some callers might wait
     }
   };
 
-  const savePrescription = (prescription: Omit<Prescription, 'id'>) => {
-    setPrescriptions(prev => {
-      // Check if a prescription already exists for this patient on this date
-      const existingIdx = prev.findIndex(p => p.patientId === prescription.patientId && p.date === prescription.date);
+  const updatePatient = async (updatedPatient: Patient) => {
+    const { error } = await supabase.from('patients').update({
+      name: updatedPatient.name,
+      cpf: updatedPatient.cpf,
+      cns: updatedPatient.cns,
+      phone: updatedPatient.phone,
+      address: updatedPatient.address,
+      birth_date: updatedPatient.birthDate
+    }).eq('id', updatedPatient.id);
 
-      if (existingIdx !== -1) {
-        // Update existing prescription: replace items with the new list (which includes accumulated items)
-        const updated = [...prev];
-        updated[existingIdx] = { ...prev[existingIdx], ...prescription };
-        return updated;
+    if (!error) {
+      setPatients(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+    }
+  };
+
+  const deletePatient = async (id: string) => {
+    if (confirm('Deseja excluir permanentemente este paciente?')) {
+      const { error } = await supabase.from('patients').delete().eq('id', id);
+      if (!error) {
+        setPatients(prev => prev.filter(p => p.id !== id));
+        // Also cascade locally if needed, but DB handles cascade delete
+        setPrescriptions(prev => prev.filter(p => p.patientId !== id));
+        setEvolutions(prev => prev.filter(e => e.patientId !== id));
       }
+    }
+  };
 
-      // Create new prescription
-      const newPrescription = { ...prescription, id: Date.now().toString() };
-      return [newPrescription, ...prev];
-    });
+  const savePrescription = async (prescription: Omit<Prescription, 'id'>) => {
+    if (!currentUser) return;
 
-    prescription.items.forEach(item => {
+    // Check collision locally first for UX speed or DB query?
+    // Let's query DB for existing prescription on this date
+    const { data: existing } = await supabase
+      .from('prescriptions')
+      .select('id, items')
+      .eq('patient_id', prescription.patientId)
+      .eq('date', prescription.date)
+      .maybeSingle();
+
+    if (existing) {
+      // Update
+      const { data: updated } = await supabase.from('prescriptions').update({
+        items: prescription.items, // Replace items
+        usage_type: prescription.usageType,
+        location: prescription.location,
+        doctor_name: prescription.doctorName,
+        doctor_crm: prescription.doctorCrm
+      }).eq('id', existing.id).select().single();
+
+      if (updated) {
+        setPrescriptions(prev => prev.map(p => p.id === existing.id ? { ...updated, patientId: updated.patient_id, usageType: updated.usage_type, doctorName: updated.doctor_name, doctorCrm: updated.doctor_crm } : p));
+      }
+    } else {
+      // Insert
+      const { data: inserted } = await supabase.from('prescriptions').insert([{
+        user_id: currentUser.id,
+        patient_id: prescription.patientId,
+        date: prescription.date,
+        items: prescription.items,
+        usage_type: prescription.usageType,
+        location: prescription.location,
+        doctor_name: prescription.doctorName,
+        doctor_crm: prescription.doctorCrm
+      }]).select().single();
+
+      if (inserted) {
+        setPrescriptions(prev => [{ ...inserted, patientId: inserted.patient_id, usageType: inserted.usage_type, doctorName: inserted.doctor_name, doctorCrm: inserted.doctor_crm }, ...prev]);
+      }
+    }
+
+    // Auto-add medications if not exist
+    for (const item of prescription.items) {
       const exists = medications.find(m => m.name.toLowerCase() === item.name.toLowerCase());
       if (!exists) {
-        const newMed: Medication = {
-          id: Date.now().toString() + Math.random(),
+        await addMedication({
           name: item.name,
           description: item.dosage,
           category: 'Geral',
@@ -199,23 +246,43 @@ const App: React.FC = () => {
           stock: 0,
           price: 0,
           status: 'Estoque Baixo'
-        };
-        setMedications(prev => [...prev, newMed]);
+        });
       }
-    });
-  };
-
-  const updateMedication = (med: Medication) => setMedications(prev => prev.map(m => m.id === med.id ? med : m));
-  const addMedication = (med: Omit<Medication, 'id'>) => setMedications(prev => [...prev, { ...med, id: Date.now().toString() }]);
-  const deleteMedication = (id: string) => {
-    if (confirm('Deseja remover este item do estoque?')) {
-      setMedications(prev => prev.filter(m => m.id !== id));
     }
   };
 
-  const saveEvolution = (evolution: Omit<Evolution, 'id'>) => {
-    const newEvolution = { ...evolution, id: Date.now().toString() };
-    setEvolutions(prev => [newEvolution, ...prev]);
+  const updateMedication = async (med: Medication) => {
+    const { error } = await supabase.from('medications').update(med).eq('id', med.id);
+    if (!error) setMedications(prev => prev.map(m => m.id === med.id ? med : m));
+  };
+
+  const addMedication = async (med: Omit<Medication, 'id'>) => {
+    if (!currentUser) return;
+    const { data } = await supabase.from('medications').insert([{ ...med, user_id: currentUser.id }]).select().single();
+    if (data) setMedications(prev => [...prev, data]);
+  };
+
+  const deleteMedication = async (id: string) => {
+    if (confirm('Deseja remover este item do estoque?')) {
+      const { error } = await supabase.from('medications').delete().eq('id', id);
+      if (!error) setMedications(prev => prev.filter(m => m.id !== id));
+    }
+  };
+
+  const saveEvolution = async (evolution: Omit<Evolution, 'id'>) => {
+    if (!currentUser) return;
+    const { data } = await supabase.from('evolutions').insert([{
+      user_id: currentUser.id,
+      patient_id: evolution.patientId,
+      date: evolution.date,
+      content: evolution.content,
+      doctor_name: evolution.doctorName,
+      doctor_crm: evolution.doctorCrm
+    }]).select().single();
+
+    if (data) {
+      setEvolutions(prev => [{ ...data, patientId: data.patient_id, doctorName: data.doctor_name, doctorCrm: data.doctor_crm }, ...prev]);
+    }
   };
 
   const [prescribingPatient, setPrescribingPatient] = useState<{ patient?: Patient, prescription?: Prescription } | null>(null);
