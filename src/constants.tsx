@@ -7,7 +7,7 @@ export const DOCTOR_INFO = {
   crm: 'CRM-SP 207506',
   email: 'contato@comunidaderestitui.com.br',
   phones: '(12) 3881 - 3828 (12) 99794-1465 (12) 99753-0071',
-  address: 'Av. Antônio Francisco Pascali Paloni, 866 - Barueri - Canta Galo',
+  address: 'Av. Antônio Francisco Pascoal Peliciari, 955-Sumaré-Canta Galo Caraguatatuba-SP-CEP:11661-395',
   cnpj: '12.641.771/0001-47'
 };
 
