@@ -54,18 +54,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onRegister, onGoo
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 overflow-hidden relative">
       <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 size-[600px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-[440px] z-10">
+      <div className="w-full max-w-[380px] z-10 transition-all">
         <div className="flex flex-col items-center mb-4">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl mb-4">
-            <span className="material-symbols-outlined text-primary text-[28px]">medical_services</span>
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-xl mb-3">
+            <span className="material-symbols-outlined text-primary text-[24px]">medical_services</span>
           </div>
-          <h1 className="text-white text-2xl font-black tracking-tight">MedSys<span className="text-primary">.Pro</span></h1>
+          <h1 className="text-white text-xl font-black tracking-tight">MedSys<span className="text-primary">.Pro</span></h1>
         </div>
 
-        <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-2xl transition-all duration-300">
-          <div className="text-center mb-6">
-            <h2 className="text-slate-900 text-lg font-bold">{isRegistering ? 'Nova Conta Profissional' : 'Acesso ao Painel'}</h2>
-            <p className="text-slate-500 text-xs mt-1">{isRegistering ? 'Cadastre seu nome e e-mail para começar.' : 'Insira suas credenciais para continuar.'}</p>
+        <div className="bg-white rounded-[1.5rem] p-5 sm:p-6 shadow-2xl transition-all duration-300">
+          <div className="text-center mb-5">
+            <h2 className="text-slate-900 text-base font-bold">{isRegistering ? 'Nova Conta Profissional' : 'Acesso ao Painel'}</h2>
+            <p className="text-slate-500 text-[10px] mt-1">{isRegistering ? 'Cadastre seu nome e e-mail para começar.' : 'Insira suas credenciais para continuar.'}</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
