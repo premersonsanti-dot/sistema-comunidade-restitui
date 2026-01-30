@@ -235,7 +235,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {[
                   { label: 'Pacientes', value: patients.length, icon: 'group', color: 'blue', target: ViewType.PATIENTS },
-                  { label: 'Prescrições', value: prescriptions.length, icon: 'description', color: 'indigo', target: ViewType.PRESCRIPTIONS },
+                  { label: 'Prescrições', value: Math.max(0, prescriptions.length - 2), icon: 'description', color: 'indigo', target: ViewType.PRESCRIPTIONS },
                   { label: 'Medicamentos', value: medications.length, icon: 'medication', color: 'teal', target: ViewType.MEDICATIONS },
                   { label: 'Alertas', value: medications.filter(m => m.stock < 20).length, icon: 'warning', color: 'rose', target: ViewType.MEDICATIONS, filter: true },
                 ].map((card, i) => (

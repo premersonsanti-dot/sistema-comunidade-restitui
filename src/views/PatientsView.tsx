@@ -141,23 +141,7 @@ export const PatientsView: React.FC<PatientsViewProps> = ({
         doctorName: e.doctorName,
         doctorCrm: e.doctorCrm,
         fullContent: e.content
-      })),
-      {
-        id: 'exam-1',
-        type: 'Exame',
-        date: '2025-12-12',
-        title: 'Resultados de Exames',
-        status: 'Concluído',
-        details: ['Hemograma Completo', 'Perfil Lipídico']
-      },
-      {
-        id: 'note-1',
-        type: 'Anotação',
-        date: '2025-12-10',
-        title: 'Anotação Clínica (Evolução)',
-        status: 'Registrado',
-        details: ['Paciente apresenta melhora significativa no quadro de dor.', 'Mantida a medicação atual.']
-      }
+      }))
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const filteredEvents = activeTab === 'Todos os Registros'
