@@ -72,11 +72,11 @@ export const PrescriptionDocument: React.FC<PrescriptionDocumentProps> = ({
                             <div className="flex gap-2">
                                 <span>{idx + 1}.</span>
                                 <div>
-                                    <span className="font-bold">{item.name || 'Medicamento ' + (idx + 1)}</span>
+                                    <span>{item.name || 'Medicamento ' + (idx + 1)}</span>
                                     {item.dosage && <span> ({item.dosage})</span>}
                                 </div>
                             </div>
-                            {item.quantity && <span className="font-bold whitespace-nowrap">{item.quantity}</span>}
+                            {item.quantity && <span className="whitespace-nowrap">{item.quantity}</span>}
                         </div>
                     ))}
                 </div>

@@ -4,6 +4,8 @@ import { Medication } from '../types';
 import { Modal } from '../components/Modal';
 import { Input, Select } from '../components/Input';
 
+import { supabase } from '../supabase';
+
 interface InventoryViewProps {
   medications: Medication[];
   onAddMedication: (med: Omit<Medication, 'id'>) => void;
@@ -26,6 +28,62 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
     return matchesSearch && matchesLowStock;
   });
 
+  const handleCleanupDuplicates = async () => {
+    if (!confirm('Isso irá remover todas as duplicatas do banco de dados, mantendo apenas o registro mais antigo de cada medicamento. Deseja continuar?')) return;
+
+    try {
+      // 1. Fetch all medications
+      const { data: allMeds, error } = await supabase.from('medications').select('*').order('created_at', { ascending: true });
+
+      if (error || !allMeds) {
+        alert('Erro ao buscar medicamentos: ' + (error?.message || 'Erro desconhecido'));
+        return;
+      }
+
+      // 2. Group by normalized name
+      const groups: { [key: string]: Medication[] } = {};
+      allMeds.forEach((m: Medication) => {
+        const key = m.name.trim().toLowerCase();
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(m);
+      });
+
+      // 3. Identify duplicates to remove
+      const idsToRemove: string[] = [];
+      let removedCount = 0;
+
+      Object.values(groups).forEach(group => {
+        if (group.length > 1) {
+          // Keep the first one (oldest because we ordered by created_at ascending)
+          // OR keep the one with stock if others have 0? Let's stick to oldest for stability, assuming duplicates are recent errors.
+          // Actually, let's keep the one with the most info if possible, but simplest is oldest.
+          const [keep, ...remove] = group;
+          remove.forEach(r => idsToRemove.push(r.id));
+          removedCount += remove.length;
+        }
+      });
+
+      if (idsToRemove.length === 0) {
+        alert('Nenhuma duplicata encontrada.');
+        return;
+      }
+
+      // 4. Delete duplicates
+      const { error: deleteError } = await supabase.from('medications').delete().in('id', idsToRemove);
+
+      if (deleteError) {
+        alert('Erro ao remover duplicatas: ' + deleteError.message);
+      } else {
+        alert(`${removedCount} medicamenos duplicados foram removidos com sucesso! A página será recarregada.`);
+        window.location.reload();
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert('Ocorreu um erro ao processar as duplicatas.');
+    }
+  };
+
   const handleOpenModal = (med?: Medication) => {
     if (med) {
       setEditingMedId(med.id);
@@ -39,7 +97,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const status = formData.stock <= 0 ? 'Pedido Solicitado' : formData.stock < 20 ? 'Estoque Baixo' : 'Em Estoque';
+    const status = (formData.stock <= 0 ? 'Pedido Solicitado' : formData.stock < 20 ? 'Estoque Baixo' : 'Em Estoque') as Medication['status'];
     const finalData = { ...formData, status };
     if (editingMedId) {
       onUpdateMedication({ ...finalData, id: editingMedId });
@@ -56,7 +114,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Farmácia e Estoque</h1>
           <p className="text-slate-500 text-sm mt-1">{medications.length} itens cadastrados</p>
         </div>
-        <button onClick={() => handleOpenModal()} className="px-6 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg hover:bg-primary-dark transition-all">+ Novo Medicamento</button>
+        <div className="flex gap-2">
+          <button onClick={handleCleanupDuplicates} className="px-4 py-3 bg-rose-100 text-rose-600 rounded-xl text-sm font-bold shadow-sm hover:bg-rose-200 transition-all flex items-center gap-2">
+            <span className="material-icons-round text-base">delete_sweep</span> Limpar Duplicatas
+          </button>
+          <button onClick={() => handleOpenModal()} className="px-6 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg hover:bg-primary-dark transition-all">+ Novo Medicamento</button>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">

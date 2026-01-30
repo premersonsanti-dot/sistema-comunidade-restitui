@@ -146,15 +146,25 @@ const App: React.FC = () => {
   // CRUD Helpers
   const addPatient = async (newPatient: Omit<Patient, 'id'>) => {
     if (!currentUser) return;
-    const { data } = await supabase.from('patients').insert([{
+
+    // Sanitize birthDate: empty string should be null for Date column
+    const birthDate = newPatient.birthDate ? newPatient.birthDate : null;
+
+    const { data, error } = await supabase.from('patients').insert([{
       user_id: currentUser.id,
       name: newPatient.name,
       cpf: newPatient.cpf,
       cns: newPatient.cns,
       phone: newPatient.phone,
       address: newPatient.address,
-      birth_date: newPatient.birthDate
+      birth_date: birthDate
     }]).select().single();
+
+    if (error) {
+      console.error("Error creating patient:", error);
+      alert(`Erro ao criar paciente: ${error.message}`);
+      return;
+    }
 
     if (data) {
       const formatted = { ...data, birthDate: data.birth_date };
@@ -192,54 +202,56 @@ const App: React.FC = () => {
   };
 
   const savePrescription = async (prescription: Omit<Prescription, 'id'>) => {
-    if (!currentUser) return;
+    if (!currentUser) throw new Error("Usuário não autenticado.");
 
-    // Check collision locally first for UX speed or DB query?
-    // Let's query DB for existing prescription on this date
-    const { data: existing } = await supabase
-      .from('prescriptions')
-      .select('id, items')
-      .eq('patient_id', prescription.patientId)
-      .eq('date', prescription.date)
-      .maybeSingle();
+    // Always insert a new prescription (allow multiple per day)
+    const { data: inserted, error: insertError } = await supabase.from('prescriptions').insert([{
+      user_id: currentUser.id,
+      patient_id: prescription.patientId,
+      date: prescription.date,
+      items: prescription.items,
+      usage_type: prescription.usageType,
+      location: prescription.location,
+      doctor_name: prescription.doctorName,
+      doctor_crm: prescription.doctorCrm
+    }]).select().single();
 
-    if (existing) {
-      // Update
-      const { data: updated } = await supabase.from('prescriptions').update({
-        items: prescription.items, // Replace items
-        usage_type: prescription.usageType,
-        location: prescription.location,
-        doctor_name: prescription.doctorName,
-        doctor_crm: prescription.doctorCrm
-      }).eq('id', existing.id).select().single();
+    if (insertError) throw insertError;
 
-      if (updated) {
-        setPrescriptions(prev => prev.map(p => p.id === existing.id ? { ...updated, patientId: updated.patient_id, usageType: updated.usage_type, doctorName: updated.doctor_name, doctorCrm: updated.doctor_crm } : p));
-      }
-    } else {
-      // Insert
-      const { data: inserted } = await supabase.from('prescriptions').insert([{
-        user_id: currentUser.id,
-        patient_id: prescription.patientId,
-        date: prescription.date,
-        items: prescription.items,
-        usage_type: prescription.usageType,
-        location: prescription.location,
-        doctor_name: prescription.doctorName,
-        doctor_crm: prescription.doctorCrm
-      }]).select().single();
+    // Refresh all data to ensure consistency across views (Patients History, etc)
+    await fetchAllData();
 
-      if (inserted) {
-        setPrescriptions(prev => [{ ...inserted, patientId: inserted.patient_id, usageType: inserted.usage_type, doctorName: inserted.doctor_name, doctorCrm: inserted.doctor_crm }, ...prev]);
-      }
-    }
+    // Auto-add medications if not exist is handled below...
+    /* ... existing duplicate medication check code continues ... */
 
     // Auto-add medications if not exist
+    // Use a Set to track existing names (normalized) to catch duplicates effectively
+    const existingNames = new Set(medications.map(m => m.name.trim().toLowerCase()));
+
     for (const item of prescription.items) {
-      const exists = medications.find(m => m.name.toLowerCase() === item.name.toLowerCase());
-      if (!exists) {
+      if (!item.name) continue;
+
+      const normalizedName = item.name.trim().toLowerCase();
+
+      // 1. Check local batch cache first
+      if (existingNames.has(normalizedName)) continue;
+
+      // 2. Check Database (Source of Truth) to avoid duplicates from stale state
+      const { data: dbExisting } = await supabase
+        .from('medications')
+        .select('id')
+        .ilike('name', item.name.trim())
+        .maybeSingle();
+
+      if (dbExisting) {
+        existingNames.add(normalizedName); // Add to cache so we don't query again
+        continue;
+      }
+
+      // 3. If not found, insert
+      if (!existingNames.has(normalizedName)) {
         await addMedication({
-          name: item.name,
+          name: item.name.trim(), // Save with original casing but trimmed
           description: item.dosage,
           category: 'Geral',
           form: 'Outro',
@@ -247,6 +259,9 @@ const App: React.FC = () => {
           price: 0,
           status: 'Estoque Baixo'
         });
+
+        // 4. Update local cache
+        existingNames.add(normalizedName);
       }
     }
   };
@@ -345,6 +360,7 @@ const App: React.FC = () => {
               onSavePrescription={savePrescription}
               initialPatient={prescribingPatient?.patient}
               initialPrescription={prescribingPatient?.prescription}
+              prescriptions={prescriptions}
             />
           )}
           {currentView === ViewType.MEDICATIONS && (

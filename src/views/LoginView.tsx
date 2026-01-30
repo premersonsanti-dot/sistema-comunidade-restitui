@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 
 interface LoginViewProps {
-  onLogin: (stayConnected: boolean, credentials: { user: string; pass: string }) => boolean;
-  onRegister: (userData: any) => boolean;
+  onLogin: (stayConnected: boolean, credentials: { user: string; pass: string }) => boolean | Promise<boolean>;
+  onRegister: (userData: any) => boolean | Promise<boolean>;
   onGoogleLogin: () => void;
   onForgotPassword: () => void;
 }

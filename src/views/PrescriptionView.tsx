@@ -4,17 +4,21 @@ import ReactDOM from 'react-dom';
 import { DOCTOR_INFO } from '../constants';
 import { PrescriptionItem, Patient, Prescription, Medication } from '../types';
 import { PrescriptionDocument } from '../components/PrescriptionDocument';
+import { Modal } from '../components/Modal';
+import { addDays, differenceInDays, parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface PrescriptionViewProps {
   patients: Patient[];
   medications: Medication[];
-  onAddPatient: (patient: Omit<Patient, 'id'>) => void;
-  onSavePrescription: (prescription: Omit<Prescription, 'id'>) => void;
+  onAddPatient: (patient: Omit<Patient, 'id'>) => Promise<Patient | undefined>;
+  onSavePrescription: (prescription: Omit<Prescription, 'id'>) => void | Promise<void>;
   initialPatient?: Patient | null;
   initialPrescription?: Prescription | null;
+  prescriptions?: Prescription[];
 }
 
-export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, medications, onAddPatient, onSavePrescription, initialPatient, initialPrescription }) => {
+export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, medications, onAddPatient, onSavePrescription, initialPatient, initialPrescription, prescriptions = [] }) => {
   // Current Date Helper
   const today = new Date();
   const formattedToday = today.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -35,6 +39,26 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
   const [doctorName, setDoctorName] = useState(() => localStorage.getItem('medsys_doctor_name') || DOCTOR_INFO.name);
   const [doctorCrm, setDoctorCrm] = useState(() => localStorage.getItem('medsys_doctor_crm') || DOCTOR_INFO.crm);
   const [isAutoFilled, setIsAutoFilled] = useState(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+
+  // Expiring Prescriptions Logic
+  const expiringPrescriptions = prescriptions.filter(p => {
+    if (!p.date) return false;
+    const date = parseISO(p.date);
+    const expiryDate = addDays(date, 60);
+    const daysUntil = differenceInDays(expiryDate, today);
+    return daysUntil <= 7; // Expired or expiring within 7 days
+  }).sort((a, b) => new Date(a.date || '').getTime() - new Date(b.date || '').getTime());
+
+  const handleRenew = (p: Prescription) => {
+    setItems(p.items);
+    setUsageType(p.usageType as any);
+    setIssueLocation(p.location);
+    // Find patient
+    const pat = patients.find(patient => patient.id === p.patientId);
+    if (pat) fillPatientData(pat);
+    setIsAlertModalOpen(false);
+  };
 
   useEffect(() => {
     localStorage.setItem('medsys_doctor_name', doctorName);
@@ -182,49 +206,70 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
     setIsAutoFilled(false);
   };
 
-  const processSave = () => {
+  const processSave = async (): Promise<boolean> => {
     let targetPatientId = '';
     const existing = patients.find(p => p.cpf.replace(/\D/g, '') === patientData.cpf.replace(/\D/g, ''));
 
     if (!existing && patientData.name && patientData.cpf) {
       // Use the newly created patient's ID
-      const newPatient = onAddPatient(patientData) as unknown as Patient;
-      targetPatientId = newPatient.id;
+      const newPatient = await onAddPatient(patientData);
+      if (newPatient) {
+        targetPatientId = newPatient.id;
+      } else {
+        alert("Erro ao cadastrar paciente automaticamente. Tente cadastrá-lo manualmente na tela de Pacientes.");
+        return false;
+      }
     } else if (existing) {
       targetPatientId = existing.id;
     }
 
-    onSavePrescription({
-      patientId: targetPatientId,
-      date: issueDate,
-      location: issueLocation,
-      usageType,
-      items: items.filter(item => item.name.trim() !== ''),
-      doctorName,
-      doctorCrm
-    });
+    if (!targetPatientId) {
+      alert("Erro fatal: Identificação do paciente falhou. Não é possível salvar a prescrição sem um paciente vinculado.");
+      return false;
+    }
+
+    try {
+      await onSavePrescription({
+        patientId: targetPatientId,
+        date: issueDate,
+        location: issueLocation,
+        usageType,
+        items: items.filter(item => item.name.trim() !== ''),
+        doctorName,
+        doctorCrm
+      });
+      return true;
+    } catch (error) {
+      console.error("Error saving prescription:", error);
+      alert("Erro ao salvar prescrição. Verifique o console ou tente novamente.");
+      return false;
+    }
   };
 
-  const handlePrint = (e?: React.FormEvent) => {
+  const handlePrint = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!patientData.name || !patientData.cpf) {
       alert('Por favor, preencha o nome e CPF do paciente.');
       return;
     }
-    processSave();
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    const success = await processSave();
+    if (success) {
+      setTimeout(() => {
+        window.print();
+      }, 150);
+    }
   };
 
-  const handleSaveOnly = (e?: React.MouseEvent) => {
+  const handleSaveOnly = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!patientData.name || !patientData.cpf) {
       alert('Por favor, preencha o nome e CPF do paciente.');
       return;
     }
-    processSave();
-    alert('Prescrição salva com sucesso!');
+    const success = await processSave();
+    if (success) {
+      alert('Prescrição salva com sucesso!');
+    }
   };
 
   // --- PRESCRIPTION CARD RENDERER ---
@@ -263,13 +308,28 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
         <div className="w-1/2 bg-white flex flex-col border-r border-slate-200 overflow-y-auto custom-scrollbar no-print p-8">
           <div className="flex justify-between items-center mb-8 mt-2">
             <h2 className="text-xl font-bold text-slate-900">Sistema de Prescrição Médica</h2>
-            <button
-              type="button"
-              onClick={handleNewPrescription}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all"
-            >
-              <span className="material-icons-round text-sm">add</span> Nova Receita
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAlertModalOpen(true)}
+                className="relative flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-all"
+              >
+                <span className="material-icons-round text-sm text-amber-500">warning</span>
+                Alertas
+                {expiringPrescriptions.length > 0 && (
+                  <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white animate-pulse shadow-sm border border-white">
+                    {expiringPrescriptions.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleNewPrescription}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all"
+              >
+                <span className="material-icons-round text-sm">add</span> Nova Receita
+              </button>
+            </div>
           </div>
 
           <form className="space-y-6" onSubmit={handlePrint}>
@@ -451,7 +511,7 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
                 <div className="relative">
                   <input
                     required placeholder="Nome do Medicamento"
-                    className="w-full bg-white rounded-xl border-slate-200 text-sm p-3 focus:ring-primary outline-none font-bold text-slate-700"
+                    className="w-full bg-white rounded-xl border-slate-200 text-sm p-3 focus:ring-primary outline-none text-slate-700"
                     value={item.name}
                     onChange={(e) => updateItem(item.id, 'name', e.target.value)}
                     onKeyDown={(e) => handleItemKeyDown(e, item.id, item.name)}
@@ -511,6 +571,68 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
           {renderPrescriptionCard()}
         </div>
       </div>
+      <Modal
+        isOpen={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        title="Alertas de Vencimento"
+        subtitle="Prescrições vencidas ou próximas do vencimento (60 dias)"
+        icon="warning"
+        iconBgColor="bg-amber-50 text-amber-500"
+        maxWidth="max-w-4xl"
+      >
+        <div className="p-6">
+          {expiringPrescriptions.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <span className="material-icons-round text-4xl mb-2 opacity-50">check_circle</span>
+              <p>Nenhuma prescrição próxima do vencimento.</p>
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-black tracking-widest text-slate-400 uppercase border-b border-slate-100">
+                  <th className="pb-3 pl-4">Paciente</th>
+                  <th className="pb-3">Data Emissão</th>
+                  <th className="pb-3">Vencimento</th>
+                  <th className="pb-3">Status</th>
+                  <th className="pb-3 pr-4 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {expiringPrescriptions.map(p => {
+                  const pDate = parseISO(p.date);
+                  const expiryDate = addDays(pDate, 60);
+                  const daysUntil = differenceInDays(expiryDate, today);
+                  const patient = patients.find(pt => pt.id === p.patientId);
+
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 pl-4">
+                        <p className="font-bold text-slate-700 text-sm">{patient?.name || 'Paciente desconhecido'}</p>
+                        <p className="text-[10px] text-slate-400">{patient?.cpf}</p>
+                      </td>
+                      <td className="py-3 text-sm text-slate-600">{format(pDate, "dd/MM/yyyy")}</td>
+                      <td className="py-3 text-sm text-slate-600">{format(expiryDate, "dd/MM/yyyy")}</td>
+                      <td className="py-3">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${daysUntil < 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {daysUntil < 0 ? 'VENCEU' : `VENCE EM ${daysUntil} DIAS`}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <button
+                          onClick={() => handleRenew(p)}
+                          className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all"
+                        >
+                          Renovar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Modal>
     </>
   );
 };

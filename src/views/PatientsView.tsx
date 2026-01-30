@@ -138,9 +138,10 @@ export const PatientsView: React.FC<PatientsViewProps> = ({
         title: 'Evolução Clínica',
         status: 'Registrado',
         details: [e.content.length > 100 ? e.content.substring(0, 100) + '...' : e.content],
+        fullContent: e.content,
         doctorName: e.doctorName,
         doctorCrm: e.doctorCrm,
-        fullContent: e.content
+        usageType: undefined // Explicitly undefined to satisfy union type if needed or just rely on discriminants
       }))
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
