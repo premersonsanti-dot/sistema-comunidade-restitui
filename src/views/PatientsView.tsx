@@ -414,7 +414,7 @@ export const PatientsView: React.FC<PatientsViewProps> = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Pacientes</h1>
-          <p className="text-slate-500 text-sm mt-1">Total de {Math.max(0, patients.length - 2)} pacientes cadastrados</p>
+          <p className="text-slate-500 text-sm mt-1">Total de {patients.length} pacientes cadastrados</p>
         </div>
         <button
           onClick={() => {

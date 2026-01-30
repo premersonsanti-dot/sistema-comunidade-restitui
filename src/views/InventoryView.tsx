@@ -54,7 +54,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Farmácia e Estoque</h1>
-          <p className="text-slate-500 text-sm mt-1">{Math.max(0, medications.length - 2)} itens cadastrados</p>
+          <p className="text-slate-500 text-sm mt-1">{medications.length} itens cadastrados</p>
         </div>
         <button onClick={() => handleOpenModal()} className="px-6 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg hover:bg-primary-dark transition-all">+ Novo Medicamento</button>
       </div>

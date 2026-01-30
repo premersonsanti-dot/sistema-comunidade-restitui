@@ -74,6 +74,24 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('medsys_medications', JSON.stringify(medications)); }, [medications]);
   useEffect(() => { localStorage.setItem('medsys_evolutions', JSON.stringify(evolutions)); }, [evolutions]);
 
+  // FIX: Definitive cleanup of orphaned records (data without patient)
+  // This replaces the "subtraction hack" by actually deleting phantom data.
+  useEffect(() => {
+    if (patients.length >= 0) {
+      const patientIds = new Set(patients.map(p => p.id));
+
+      const orphanedPrescriptions = prescriptions.filter(p => !patientIds.has(p.patientId));
+      if (orphanedPrescriptions.length > 0) {
+        setPrescriptions(prev => prev.filter(p => patientIds.has(p.patientId)));
+      }
+
+      const orphanedEvolutions = evolutions.filter(e => !patientIds.has(e.patientId));
+      if (orphanedEvolutions.length > 0) {
+        setEvolutions(prev => prev.filter(e => patientIds.has(e.patientId)));
+      }
+    }
+  }, [patients]);
+
   const handleLogin = async (stayConnected: boolean, credentials: { user: string; pass: string }) => {
     const { error } = await supabase.auth.signInWithPassword({
       email: credentials.user,
@@ -231,10 +249,10 @@ const App: React.FC = () => {
               <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-8">Olá, {currentUser?.name?.split(' ')[0]}</h1>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {[
-                  { label: 'Pacientes', value: Math.max(0, patients.length - 2), icon: 'group', color: 'blue', target: ViewType.PATIENTS },
-                  { label: 'Prescrições', value: Math.max(0, prescriptions.length - 2), icon: 'description', color: 'indigo', target: ViewType.PRESCRIPTIONS },
-                  { label: 'Medicamentos', value: Math.max(0, medications.length - 2), icon: 'medication', color: 'teal', target: ViewType.MEDICATIONS },
-                  { label: 'Alertas', value: Math.max(0, medications.filter(m => m.stock < 20).length - 2), icon: 'warning', color: 'rose', target: ViewType.MEDICATIONS, filter: true },
+                  { label: 'Pacientes', value: patients.length, icon: 'group', color: 'blue', target: ViewType.PATIENTS },
+                  { label: 'Prescrições', value: prescriptions.length, icon: 'description', color: 'indigo', target: ViewType.PRESCRIPTIONS },
+                  { label: 'Medicamentos', value: medications.length, icon: 'medication', color: 'teal', target: ViewType.MEDICATIONS },
+                  { label: 'Alertas', value: medications.filter(m => m.stock < 20).length, icon: 'warning', color: 'rose', target: ViewType.MEDICATIONS, filter: true },
                 ].map((card, i) => (
                   <div
                     key={i}
