@@ -328,7 +328,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-hidden flex flex-col">
           {currentView === ViewType.DASHBOARD && (
             <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-8">Olá, {currentUser?.name?.split(' ')[0]}</h1>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-8">Olá, {currentUser?.name?.split(' ')[0]} <span className="text-sm font-normal text-slate-400 opacity-50">(v1.1 - Atualizado)</span></h1>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {[
                   { label: 'Pacientes', value: patients.length, icon: 'group', color: 'blue', target: ViewType.PATIENTS },
