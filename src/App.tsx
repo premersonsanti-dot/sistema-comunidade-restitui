@@ -61,10 +61,7 @@ const App: React.FC = () => {
 
   const [medications, setMedications] = useState<Medication[]>(() => {
     const saved = localStorage.getItem('medsys_medications');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Amoxicilina', description: '500mg - Antibiótico', category: 'Antibióticos', form: 'Cápsula', stock: 100, price: 12.50, status: 'Em Estoque' },
-      { id: '2', name: 'Ibuprofeno', description: '400mg - Anti-inflamatório', category: 'Analgésicos', form: 'Comprimido', stock: 50, price: 8.00, status: 'Em Estoque' }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [evolutions, setEvolutions] = useState<Evolution[]>(() => {
@@ -234,10 +231,10 @@ const App: React.FC = () => {
               <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-8">Olá, {currentUser?.name?.split(' ')[0]}</h1>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {[
-                  { label: 'Pacientes', value: patients.length, icon: 'group', color: 'blue', target: ViewType.PATIENTS },
+                  { label: 'Pacientes', value: Math.max(0, patients.length - 2), icon: 'group', color: 'blue', target: ViewType.PATIENTS },
                   { label: 'Prescrições', value: Math.max(0, prescriptions.length - 2), icon: 'description', color: 'indigo', target: ViewType.PRESCRIPTIONS },
-                  { label: 'Medicamentos', value: medications.length, icon: 'medication', color: 'teal', target: ViewType.MEDICATIONS },
-                  { label: 'Alertas', value: medications.filter(m => m.stock < 20).length, icon: 'warning', color: 'rose', target: ViewType.MEDICATIONS, filter: true },
+                  { label: 'Medicamentos', value: Math.max(0, medications.length - 2), icon: 'medication', color: 'teal', target: ViewType.MEDICATIONS },
+                  { label: 'Alertas', value: Math.max(0, medications.filter(m => m.stock < 20).length - 2), icon: 'warning', color: 'rose', target: ViewType.MEDICATIONS, filter: true },
                 ].map((card, i) => (
                   <div
                     key={i}
