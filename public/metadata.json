@@ -1,0 +1,7 @@
+{
+  "name": "MedSys.Pro - Sistema de Gestão Clínica",
+  "description": "Uma plataforma completa para médicos gerenciarem pacientes, prescrições, inventário de medicamentos e prontuários eletrônicos com interface moderna e responsiva.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
