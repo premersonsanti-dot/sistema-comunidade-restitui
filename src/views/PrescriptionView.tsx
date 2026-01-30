@@ -184,8 +184,9 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
     const existing = patients.find(p => p.cpf.replace(/\D/g, '') === patientData.cpf.replace(/\D/g, ''));
 
     if (!existing && patientData.name && patientData.cpf) {
-      onAddPatient(patientData);
-      targetPatientId = 'new-pending';
+      // Use the newly created patient's ID
+      const newPatient = onAddPatient(patientData) as unknown as Patient;
+      targetPatientId = newPatient.id;
     } else if (existing) {
       targetPatientId = existing.id;
     }
@@ -201,19 +202,20 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
     });
   };
 
-  const handlePrint = () => {
+  const handlePrint = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!patientData.name || !patientData.cpf) {
       alert('Por favor, preencha o nome e CPF do paciente.');
       return;
     }
     processSave();
-    // Add a small delay to ensure the DOM is ready if needed, though here it's static
     setTimeout(() => {
       window.print();
     }, 150);
   };
 
-  const handleSaveOnly = () => {
+  const handleSaveOnly = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     if (!patientData.name || !patientData.cpf) {
       alert('Por favor, preencha o nome e CPF do paciente.');
       return;

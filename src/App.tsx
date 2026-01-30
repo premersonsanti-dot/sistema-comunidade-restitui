@@ -156,8 +156,21 @@ const App: React.FC = () => {
   };
 
   const savePrescription = (prescription: Omit<Prescription, 'id'>) => {
-    const newPrescription = { ...prescription, id: Date.now().toString() };
-    setPrescriptions(prev => [newPrescription, ...prev]);
+    setPrescriptions(prev => {
+      // Check if a prescription already exists for this patient on this date
+      const existingIdx = prev.findIndex(p => p.patientId === prescription.patientId && p.date === prescription.date);
+
+      if (existingIdx !== -1) {
+        // Update existing prescription: replace items with the new list (which includes accumulated items)
+        const updated = [...prev];
+        updated[existingIdx] = { ...prev[existingIdx], ...prescription };
+        return updated;
+      }
+
+      // Create new prescription
+      const newPrescription = { ...prescription, id: Date.now().toString() };
+      return [newPrescription, ...prev];
+    });
 
     prescription.items.forEach(item => {
       const exists = medications.find(m => m.name.toLowerCase() === item.name.toLowerCase());
