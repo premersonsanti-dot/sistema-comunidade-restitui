@@ -129,14 +129,17 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
           ...prev!,
           index: Math.max(prev!.index - 1, 0)
         }));
-      } else if (e.key === 'Enter') {
-        if (filteredMeds.length > 0) {
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (filteredMeds.length > 0 && activeSuggestionIndex.index >= 0) {
           e.preventDefault();
           selectSuggestion(itemId, filteredMeds[activeSuggestionIndex.index]);
         }
       } else if (e.key === 'Escape') {
         setActiveSuggestionIndex(null);
       }
+    } else if (e.key === 'Enter') {
+      // If Enter is pressed and no suggestion is active, just let it be or focus next
+      // e.preventDefault(); // Optional: prevent accidental print
     }
   };
 
@@ -156,7 +159,7 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActivePatientIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter') {
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
         if (filteredPatients.length > 0) {
           e.preventDefault();
           selectPatientSuggestion(filteredPatients[activePatientIndex]);
@@ -297,7 +300,10 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => selectPatientSuggestion(p)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              selectPatientSuggestion(p);
+                            }}
                             className={`w-full text-left p-3 hover:bg-primary/5 border-b border-slate-50 last:border-0 flex justify-between items-center group ${activePatientIndex === idx ? 'bg-primary/5 ring-1 ring-inset ring-primary/20' : ''}`}
                           >
                             <div>
@@ -457,7 +463,10 @@ export const PrescriptionView: React.FC<PrescriptionViewProps> = ({ patients, me
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => selectSuggestion(item.id, m)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            selectSuggestion(item.id, m);
+                          }}
                           className={`w-full text-left p-3 hover:bg-primary/5 border-b border-slate-50 last:border-0 flex justify-between items-center ${activeSuggestionIndex?.index === idx ? 'bg-primary/5 ring-1 ring-inset ring-primary/20' : ''}`}
                         >
                           <span className={`text-sm font-bold ${activeSuggestionIndex?.index === idx ? 'text-primary' : 'text-slate-800'}`}>{m.name}</span>
