@@ -68,6 +68,7 @@ export interface Medication {
   stock: number;
   price: number;
   status: 'Em Estoque' | 'Estoque Baixo' | 'Pedido Solicitado';
+  expiration_date?: string;
 }
 
 export interface HistoryEvent {

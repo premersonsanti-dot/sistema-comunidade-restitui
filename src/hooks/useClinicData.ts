@@ -169,11 +169,14 @@ export const useClinicData = (currentUser: any, currentView: ViewType, setCurren
 
     const addMedication = async (med: Omit<Medication, 'id' | 'clinic_id'>) => {
         if (!currentUser || !activeClinicId) return;
-        const { data } = await supabase.from('medications').insert([{
+        const payload: any = {
             ...med,
             user_id: currentUser.id,
             clinic_id: activeClinicId
-        }]).select().single();
+        };
+        if (!payload.expiration_date) delete payload.expiration_date;
+
+        const { data } = await supabase.from('medications').insert([payload]).select().single();
         if (data) setMedications(prev => [...prev, data]);
     };
 
@@ -223,7 +226,10 @@ export const useClinicData = (currentUser: any, currentView: ViewType, setCurren
     };
 
     const updateMedication = async (med: Medication) => {
-        const { error } = await supabase.from('medications').update(med).eq('id', med.id);
+        const payload: any = { ...med };
+        if (!payload.expiration_date) payload.expiration_date = null;
+        
+        const { error } = await supabase.from('medications').update(payload).eq('id', med.id);
         if (!error) setMedications(prev => prev.map(m => m.id === med.id ? med : m));
     };
 

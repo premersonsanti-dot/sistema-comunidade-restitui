@@ -19,7 +19,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Omit<Medication, 'id'>>({
-    name: '', description: '', category: 'Geral', form: 'Comprimido', stock: 0, price: 0, status: 'Em Estoque'
+    name: '', description: '', category: 'Geral', form: 'Comprimido', stock: 0, price: 0, status: 'Em Estoque', expiration_date: ''
   });
 
   const filtered = medications.filter(m => {
@@ -90,9 +90,52 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
       setFormData({ ...med });
     } else {
       setEditingMedId(null);
-      setFormData({ name: '', description: '', category: 'Geral', form: 'Comprimido', stock: 0, price: 0, status: 'Em Estoque' });
+      setFormData({ name: '', description: '', category: 'Geral', form: 'Comprimido', stock: 0, price: 0, status: 'Em Estoque', expiration_date: '' });
     }
     setIsModalOpen(true);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Nome', 'Descrição', 'Categoria', 'Forma', 'Estoque', 'Status', 'Validade'];
+    const csvContent = [
+      headers.join(','),
+      ...filtered.map(med => [
+        `"${med.name}"`,
+        `"${med.description}"`,
+        `"${med.category}"`,
+        `"${med.form}"`,
+        med.stock,
+        `"${med.status}"`,
+        `"${med.expiration_date ? med.expiration_date.split('-').reverse().join('/') : ''}"`
+      ].join(','))
+    ].join('\\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `estoque_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const isExpiringSoon = (dateString?: string) => {
+    if (!dateString) return false;
+    const expDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const oneMonthFromNow = new Date(today);
+    oneMonthFromNow.setMonth(today.getMonth() + 1);
+    return expDate > today && expDate <= oneMonthFromNow;
+  };
+
+  const isExpired = (dateString?: string) => {
+    if (!dateString) return false;
+    const expDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return expDate <= today;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -115,6 +158,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
           <p className="text-slate-500 text-sm mt-1">{medications.length} itens cadastrados</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={handleExportCSV} className="px-4 py-3 bg-green-50 text-green-600 rounded-xl text-sm font-bold shadow-sm hover:bg-green-100 transition-all flex items-center gap-2">
+            <span className="material-icons-round text-base">download</span> Exportar Planilha
+          </button>
           <button onClick={handleCleanupDuplicates} className="px-4 py-3 bg-rose-100 text-rose-600 rounded-xl text-sm font-bold shadow-sm hover:bg-rose-200 transition-all flex items-center gap-2">
             <span className="material-icons-round text-base">delete_sweep</span> Limpar Duplicatas
           </button>
@@ -134,6 +180,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
             <tr className="text-[10px] font-black tracking-widest text-slate-400 uppercase border-b bg-slate-50/50">
               <th className="px-6 py-4">Medicamento</th>
               <th className="px-6 py-4">Categoria / Forma</th>
+              <th className="px-6 py-4">Validade</th>
               <th className="px-6 py-4">Estoque</th>
               <th className="px-6 py-4 text-right">Ações</th>
             </tr>
@@ -148,6 +195,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
                   </div>
                 </td>
                 <td className="px-6 py-4"><span className="text-xs font-bold text-slate-600">{med.category}</span><p className="text-[10px] text-slate-400">{med.form}</p></td>
+                <td className="px-6 py-4">
+                  {med.expiration_date ? (
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-medium text-slate-700">
+                        {med.expiration_date.split('-').reverse().join('/')}
+                      </span>
+                      {isExpired(med.expiration_date) && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">Vencido</span>
+                      )}
+                      {isExpiringSoon(med.expiration_date) && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700">Vence em breve</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">-</span>
+                  )}
+                </td>
                 <td className="px-6 py-4">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${med.status === 'Em Estoque' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                     {med.stock} UN • {med.status}
@@ -215,13 +279,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ medications, onAdd
                 onChange={e => setFormData({ ...formData, form: e.target.value })}
               />
             </div>
-            <Input
-              label="Estoque Atual"
-              type="number"
-              placeholder="Estoque Atual"
-              value={formData.stock}
-              onChange={e => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Estoque Atual"
+                type="number"
+                placeholder="Estoque Atual"
+                value={formData.stock}
+                onChange={e => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
+              />
+              <Input
+                label="Data de Validade (Opcional)"
+                type="date"
+                value={formData.expiration_date || ''}
+                onChange={e => setFormData({ ...formData, expiration_date: e.target.value })}
+              />
+            </div>
           </div>
           <button type="submit" className="w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg">Salvar Medicamento</button>
         </form>
